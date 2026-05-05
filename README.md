@@ -20,7 +20,9 @@ token has also expired.
 ## Requirements
 
 * Python 3.10 or newer
-* A running Insighta backend (default: `http://localhost:8000`)
+* **Backend base URL configured** --- the CLI reads `INSIGHTA_API_URL` from the
+  process environment and from layered `.env` files (see
+  [Configuration](#configuration)).
 * The backend must have CLI OAuth credentials configured (see
   [Backend setup](#backend-setup) below) before `insighta login` will succeed
 
@@ -59,16 +61,43 @@ insighta --help
 
 ## Configuration
 
-The CLI is zero-config for the default local setup. To point it at a different
-backend, set:
+Backend URL resolution (first match wins):
 
-| Variable                 | Default                  | Purpose                          |
-| ------------------------ | ------------------------ | -------------------------------- |
-| `INSIGHTA_API_URL`       | `http://localhost:8000`  | Backend base URL                 |
-| `INSIGHTA_API_VERSION`   | `1`                      | Sent as `X-API-Version` header   |
+1. Explicit `ApiClient(...)` callers (internals only --- use env / `.env`).
+2. `INSIGHTA_API_URL` in the environment --- after layered `.env` files are loaded.
+3. `api_base_url` stored alongside your last login in `~/.insighta/credentials.json`.
+
+**.env layering** is applied on startup in this order --- later layers override earlier ones:
+
+* `~/.insighta/.env` --- machine-local defaults beside `credentials.json`.
+* `.env` in the **current working directory** --- project or repo overrides (wins).
+
+For local development from the cloned repo:
+
+```bash
+cp .env.example .env   # edit INSIGHTA_API_URL as needed
+```
+
+Or export for a single shell:
+
+```bash
+export INSIGHTA_API_URL=https://api.example.com
+```
+
+Optional:
+
+| Variable                 | Default        | Purpose                        |
+| ------------------------ | -------------- | ------------------------------ |
+| `INSIGHTA_API_URL`       | *(required*)   | Backend base URL (no slash)    |
+| `INSIGHTA_API_VERSION`   | `1`            | Sent as `X-API-Version` header |
+
+If `INSIGHTA_API_URL` is missing **and** you have no usable `api_base_url` in
+stored credentials (e.g. first-time `insighta login`), the CLI exits with an
+error that tells you where to configure it.
 
 Credentials are stored at `~/.insighta/credentials.json` and re-created on each
-`insighta login`.
+successful `insighta login`; that file also persists which backend URL you logged
+against when present.
 
 ## Authentication
 

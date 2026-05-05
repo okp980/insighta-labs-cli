@@ -11,12 +11,13 @@ Handles:
 
 from __future__ import annotations
 
+import os
 import secrets
 from typing import Any, Iterator, Mapping
 
 import httpx
 
-from insighta.config import API_BASE_URL, DEFAULT_TIMEOUT_SECONDS, X_API_VERSION
+from insighta.config import DEFAULT_TIMEOUT_SECONDS, INSIGHTA_API_URL_VAR, X_API_VERSION
 from insighta.credentials import (
     Credentials,
     clear_credentials,
@@ -34,14 +35,41 @@ from insighta.errors import (
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+def _normalize_backend_base(url: str) -> str:
+    return url.strip().rstrip("/")
+
+
+def _resolve_backend_base_url(
+    explicit: str | None,
+    creds: Credentials | None,
+) -> str:
+    if explicit and explicit.strip():
+        return _normalize_backend_base(explicit)
+    env = os.environ.get(INSIGHTA_API_URL_VAR, "").strip()
+    if env:
+        return _normalize_backend_base(env)
+    if creds and creds.api_base_url and creds.api_base_url.strip():
+        return _normalize_backend_base(creds.api_base_url)
+    raise InsightaError(
+        "Backend URL is not configured.",
+        hint=(
+            f"Set {INSIGHTA_API_URL_VAR} in the environment, or in `.env` "
+            "in the current directory, or `~/.insighta/.env`. "
+            "Copy `.env.example` to `.env` for a local template. "
+            "If you are already logged in but this error persists, "
+            "set the variable and run `insighta login` again."
+        ),
+    )
+
+
 class ApiClient:
     """Thin wrapper around ``httpx.Client`` that knows how to talk to Insighta."""
 
     def __init__(self, base_url: str | None = None, timeout: float = DEFAULT_TIMEOUT_SECONDS):
-        self.base_url = (base_url or API_BASE_URL).rstrip("/")
         self._csrf_token = secrets.token_urlsafe(32)
+        self._creds = load_credentials()
+        self.base_url = _resolve_backend_base_url(base_url, self._creds)
         self._client = httpx.Client(base_url=self.base_url, timeout=timeout)
-        self._creds: Credentials | None = load_credentials()
 
     # ------------------------------------------------------------------
     # context manager
