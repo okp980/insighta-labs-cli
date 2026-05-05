@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-insighta = "insighta.cli:app"
+insighta = "insighta.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["insighta"]

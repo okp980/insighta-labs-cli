@@ -1,4 +1,4 @@
-from insighta.cli import app
+from insighta.cli import main
 
 if __name__ == "__main__":
-    app()
+    main()
