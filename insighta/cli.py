@@ -9,6 +9,7 @@ import typer
 
 from insighta import __version__
 from insighta.commands import auth_cmd
+from insighta.commands.profiles_cmd import profiles_app
 from insighta.errors import InsightaError, render_error
 
 app = typer.Typer(
@@ -43,6 +44,8 @@ def _root(
 app.command("login", help="Sign in to Insighta via GitHub.")(auth_cmd.login)
 app.command("logout", help="Sign out and clear stored credentials.")(auth_cmd.logout)
 app.command("whoami", help="Show the currently signed-in user.")(auth_cmd.whoami)
+
+app.add_typer(profiles_app, name="profiles")
 
 
 def main() -> None:
