@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -240,3 +243,117 @@ def create_profile(
     else:
         console.print(f"[green]\u2713[/] Created profile for [bold]{name}[/].")
     console.print(profile_detail_table(profile))
+
+
+# ---------------------------------------------------------------------------
+# `profiles export`
+# ---------------------------------------------------------------------------
+_FILENAME_RE = re.compile(r'filename="?([^";]+)"?', re.IGNORECASE)
+
+
+def _parse_filename_from_disposition(value: str | None) -> str | None:
+    if not value:
+        return None
+    match = _FILENAME_RE.search(value)
+    return match.group(1).strip() if match else None
+
+
+def _safe_destination(filename: str) -> Path:
+    """Resolve a server-supplied filename safely into the current working directory."""
+    base = Path(filename).name or "profiles_export.csv"
+    return Path.cwd() / base
+
+
+@profiles_app.command(
+    "export",
+    help="Export filtered profiles to a CSV file in the current directory.",
+)
+def export_profiles(
+    fmt: str = typer.Option("csv", "--format", help="Export format (csv)."),
+    gender: str | None = typer.Option(
+        None, "--gender", help="Filter by gender (male|female).", case_sensitive=False
+    ),
+    country: str | None = typer.Option(
+        None, "--country", help="Filter by ISO country code.", case_sensitive=False
+    ),
+    age_group: str | None = typer.Option(
+        None,
+        "--age-group",
+        help="Filter by age group (child|teenager|adult|senior).",
+        case_sensitive=False,
+    ),
+    min_age: int | None = typer.Option(None, "--min-age", help="Minimum age."),
+    max_age: int | None = typer.Option(None, "--max-age", help="Maximum age."),
+    sort_by: str | None = typer.Option(
+        None, "--sort-by", help="Sort key (age|created_at|gender_probability)."
+    ),
+    order: str | None = typer.Option(
+        None, "--order", help="Sort order (asc|desc).", case_sensitive=False
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Override the output filename. Defaults to the server-provided name.",
+    ),
+) -> None:
+    require_credentials()
+    fmt_lower = fmt.lower()
+    if fmt_lower != "csv":
+        raise InsightaError(
+            f"Unsupported export format {fmt!r}.",
+            hint="Only `csv` is supported by the backend today.",
+        )
+
+    params: dict[str, Any] = {"format": fmt_lower}
+    params.update(
+        _build_list_params(
+            page=1,
+            limit=50,
+            gender=gender.lower() if gender else None,
+            country=country.upper() if country else None,
+            age_group=age_group.lower() if age_group else None,
+            min_age=min_age,
+            max_age=max_age,
+            sort_by=sort_by.lower() if sort_by else None,
+            order=order.lower() if order else None,
+        )
+    )
+
+    with ApiClient() as client:
+        with client.stream("GET", "/api/profiles/export", params=params) as response:
+            disposition = response.headers.get("content-disposition")
+            server_name = _parse_filename_from_disposition(disposition)
+            if output is not None:
+                destination = output if output.is_absolute() else Path.cwd() / output
+            elif server_name:
+                destination = _safe_destination(server_name)
+            else:
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                destination = Path.cwd() / f"profiles_{stamp}.csv"
+
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = destination.with_suffix(destination.suffix + ".part")
+
+            total_bytes = 0
+            row_count = 0
+            with loader(f"Exporting to {destination.name}...") as status:
+                with open(tmp_path, "wb") as fh:
+                    for chunk in response.iter_bytes(chunk_size=16 * 1024):
+                        if not chunk:
+                            continue
+                        fh.write(chunk)
+                        total_bytes += len(chunk)
+                        row_count += chunk.count(b"\n")
+                        status.update(
+                            f"Exporting to {destination.name}... "
+                            f"[dim]{total_bytes / 1024:.1f} KB[/]"
+                        )
+
+            tmp_path.replace(destination)
+
+    rows = max(0, row_count - 1)
+    console.print(
+        f"[green]\u2713[/] Wrote [bold]{destination}[/] "
+        f"[dim]({total_bytes / 1024:.1f} KB, {rows} rows)[/]"
+    )
