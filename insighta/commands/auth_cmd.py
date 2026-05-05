@@ -25,11 +25,11 @@ def login() -> None:
 
     with ApiClient() as client:
         with loader("Starting GitHub OAuth flow...") as status:
+
             def _on_open(url: str) -> None:
                 status.update("Waiting for GitHub authorization in your browser...")
                 console.print(
-                    "If your browser does not open automatically, visit:\n"
-                    f"[cyan underline]{url}[/]"
+                    f"If your browser does not open automatically, visit:\n[cyan underline]{url}[/]"
                 )
 
             result = run_login_flow(client, on_open_url=_on_open)

@@ -20,6 +20,14 @@ dependencies = [
 [project.scripts]
 insighta = "insighta.cli:main"
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.0",
+    "build>=1.2",
+    "twine>=5.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["insighta"]
 

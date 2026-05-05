@@ -29,7 +29,7 @@ class InsightaApiError(InsightaError):
 
 def render_error(err: BaseException) -> None:
     if isinstance(err, InsightaError):
-        prefix = f"[bold red]Error[/]"
+        prefix = "[bold red]Error[/]"
         if err.status is not None:
             prefix += f" [dim]({err.status})[/]"
         _err_console.print(f"{prefix}: {err.message}")

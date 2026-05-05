@@ -29,7 +29,7 @@ from insighta.auth.pkce import (
 )
 from insighta.config import LOGIN_TIMEOUT_SECONDS
 from insighta.credentials import Credentials, StoredUser, save_credentials
-from insighta.errors import InsightaApiError, InsightaAuthError, InsightaError
+from insighta.errors import InsightaAuthError
 
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 
