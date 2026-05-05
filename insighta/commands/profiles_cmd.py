@@ -193,3 +193,50 @@ def search_profiles(
     footer = _pagination_footer(payload)
     if footer:
         console.print(f"[dim]{footer}[/]")
+
+
+# ---------------------------------------------------------------------------
+# `profiles create`
+# ---------------------------------------------------------------------------
+@profiles_app.command(
+    "create",
+    help='Create a profile from a name (admin only). Example: --name "Harriet Tubman".',
+)
+def create_profile(
+    name: str = typer.Option(..., "--name", help="Full name to enrich and store."),
+) -> None:
+    require_credentials()
+    name = name.strip()
+    if not name:
+        raise InsightaError("--name cannot be empty.")
+
+    with ApiClient() as client:
+        try:
+            with loader(f"Creating profile for {name!r}..."):
+                payload = client.post_json("/api/profiles/", json={"name": name})
+        except InsightaApiError as exc:
+            if exc.status == 403:
+                err_console.print(
+                    "[red]Forbidden:[/] only admins can create profiles. "
+                    "Ask an admin to grant your account the [bold]admin[/] role."
+                )
+                raise typer.Exit(code=1) from exc
+            if exc.status in {502, 504}:
+                err_console.print(
+                    f"[red]Upstream enrichment failed[/] ({exc.status}): {exc.message}"
+                )
+                raise typer.Exit(code=1) from exc
+            raise
+
+    if not isinstance(payload, dict):
+        raise InsightaError("Unexpected response from /api/profiles/ POST.")
+    profile = payload.get("data") or {}
+    if not profile:
+        raise InsightaError("Backend returned an empty profile.")
+
+    message = payload.get("message")
+    if message:
+        console.print(f"[yellow]\u2139[/] {message}")
+    else:
+        console.print(f"[green]\u2713[/] Created profile for [bold]{name}[/].")
+    console.print(profile_detail_table(profile))
